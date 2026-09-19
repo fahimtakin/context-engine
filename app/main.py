@@ -22,9 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================================
 # PYDANTIC REQ/RES TRANSACTION SCHEMAS
-# ==========================================
+
 class ChatRequest(BaseModel):
     message: str = Field(..., description="The user question parsed out from currentInput text entry")
     thread_id: Optional[str] = Field(None, description="The continuous chat session multi-turn history cookie tracking index token")
@@ -38,9 +37,9 @@ class GitIndexRequest(BaseModel):
     repo_url: str = Field(..., description="The absolute target public GitHub repository URL link location string")
     branch: Optional[str] = Field("main", description="The development tracking branch pipeline stream layer to checkout and vectorize")
 
-# ==========================================
+
 # REST API GATEWAY ROUTER ENDPOINTS
-# ==========================================
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest):
     """Processes natural language requests, running through the agentic graph state nodes."""
@@ -78,7 +77,7 @@ async def index_git_endpoint(payload: GitIndexRequest):
         # Pass parameters directly into our hardened GitPython extraction pipeline service
         result_log = ingest_github_repository(repo_target, branch=branch_target)
         
-        if "Success" in result_log or "✅" in result_log:
+        if "Success" in result_log in result_log:
             return {"status": "success", "message": result_log}
             
         # If it returns an explicit error string or fails silent validation metrics
