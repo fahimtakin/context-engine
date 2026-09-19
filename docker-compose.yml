@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: context_engine_api
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./documents:/app/documents
+    environment:
+      - PROJECT_NAME=ContextEngine
+      - DOCKER_CONTAINER=true
+      - OLLAMA_BASE_URL=http://docker.internal
+      - QDRANT_HOST=qdrant # Tells the app container to find Qdrant via its internal service name
+      - QDRANT_PORT=6333
+      - REDIS_HOST=redis # Tells the app container to find Redis via its internal service name
+      - REDIS_PORT=6379 #  Inside Docker, it MUST hit the internal port 6379, NOT the external 6380!
+    depends_on:
+      - qdrant
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: context_engine_qdrant_prod
+    restart: always
+    ports:
+      - "6333:6333" # Windows connects on 6333, internal containers use 6333
+    volumes:
+      - qdrant_prod_data:/qdrant/storage
+
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: context_engine_redis_prod
+    restart: always
+    ports:
+      - "6380:6379" # Windows connects on 6380, but internal containers MUST use 6379!
+    volumes:
+      - redis_prod_data:/data
+
+volumes:
+  qdrant_prod_data:
+  redis_prod_data:
