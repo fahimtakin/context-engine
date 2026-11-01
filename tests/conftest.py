@@ -102,7 +102,9 @@ def wire(monkeypatch):
 
         def fake_search_web(query, max_results):
             web_calls.append(query)
-            return list(web_results or [{"source": "https://example.com", "content": "web hit"}])
+            if web_results is None:
+                return [{"source": "https://example.com", "content": "web hit"}]
+            return list(web_results)
 
         monkeypatch.setattr(nodes, "get_llm", lambda: llm)
         monkeypatch.setattr(nodes, "get_vector_store", lambda: store)

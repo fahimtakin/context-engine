@@ -1,6 +1,6 @@
 """End-to-end runs of the agent graph with fake LLM, vector store and web search."""
 
-from app.agents.nodes import LLM_UNAVAILABLE_MESSAGE
+from app.agents.nodes import LLM_UNAVAILABLE_MESSAGE, NOTHING_FOUND
 from app.core.config import settings
 from tests.conftest import FakeLLM, FakeVectorStore, ask, doc
 
@@ -102,6 +102,24 @@ def test_context_from_a_previous_turn_does_not_leak_into_the_next(wire, agent):
     assert "SECRET-CONTEXT" not in system_prompt
     # ...while the conversation history itself is kept.
     assert len(second["messages"]) == 4
+
+
+def test_generator_is_told_when_a_lookup_found_nothing(wire, agent):
+    # Nothing in the index and the web search returns nothing either.
+    llm, _, web_calls = wire(store=FakeVectorStore([[], []]), web_results=[])
+
+    state = ask(agent, "How is billing implemented?")
+
+    assert len(web_calls) == 1 and state["sources"] == []
+    assert NOTHING_FOUND in llm.generation_inputs[-1][0].content
+
+
+def test_small_talk_is_not_treated_as_a_failed_lookup(wire, agent):
+    llm, _, _ = wire()
+
+    ask(agent, "Hello!")
+
+    assert NOTHING_FOUND not in llm.generation_inputs[-1][0].content
 
 
 def test_survives_ollama_being_down(wire, agent):
