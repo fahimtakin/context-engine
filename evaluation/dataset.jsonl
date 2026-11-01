@@ -1,0 +1,22 @@
+{"question": "Where is the FastAPI chat endpoint defined?", "route": "vector_db", "expected_sources": ["app/main.py"]}
+{"question": "How does the agent decide whether to rewrite the query or fall back to web search?", "route": "vector_db", "expected_sources": ["app/agents/nodes.py"]}
+{"question": "Which nodes and edges make up the LangGraph workflow?", "route": "vector_db", "expected_sources": ["app/agents/graph.py"]}
+{"question": "What happens to conversation memory if Redis is down when the API starts?", "route": "vector_db", "expected_sources": ["app/agents/graph.py"]}
+{"question": "Which fields does the agent state track for each turn?", "route": "vector_db", "expected_sources": ["app/agents/state.py"]}
+{"question": "How does ContextEngine find Ollama when it runs inside a Docker container?", "route": "vector_db", "expected_sources": ["app/core/llm.py"]}
+{"question": "How many chunks are retrieved from the vector store per query by default?", "route": "vector_db", "expected_sources": ["app/core/config.py"]}
+{"question": "How many query rewrites happen before the agent uses web search?", "route": "vector_db", "expected_sources": ["app/core/config.py", "app/agents/nodes.py"]}
+{"question": "Which repository URLs are rejected when indexing a Git repo, and why?", "route": "vector_db", "expected_sources": ["app/services/git_ingestion.py"]}
+{"question": "Which directories are skipped when collecting files for ingestion?", "route": "vector_db", "expected_sources": ["app/services/ingestion.py"]}
+{"question": "What is the largest file size that gets indexed?", "route": "vector_db", "expected_sources": ["app/services/ingestion.py"]}
+{"question": "What tools does the MCP server expose to Claude Desktop?", "route": "vector_db", "expected_sources": ["app/mcp/server.py", "README.md"]}
+{"question": "Why does the MCP server write its logs to stderr instead of stdout?", "route": "vector_db", "expected_sources": ["app/mcp/server.py", "app/core/logging_setup.py"]}
+{"question": "How is the Qdrant collection created and which distance metric does it use?", "route": "vector_db", "expected_sources": ["app/db/qdrant_client.py"]}
+{"question": "What does the readiness endpoint check?", "route": "vector_db", "expected_sources": ["app/main.py"]}
+{"question": "How do I connect ContextEngine to Claude Desktop?", "route": "vector_db", "expected_sources": ["README.md"]}
+{"question": "What happens when the grader cannot reach the language model?", "route": "vector_db", "expected_sources": ["app/agents/nodes.py"]}
+{"question": "Where is the in-memory checkpointer fallback implemented?", "route": "vector_db", "expected_sources": ["app/agents/graph.py"]}
+{"question": "What is the latest stable release of Python?", "route": "web_search", "expected_sources": []}
+{"question": "What were today's top technology news headlines?", "route": "web_search", "expected_sources": []}
+{"question": "Hi there!", "route": "direct", "expected_sources": []}
+{"question": "Thanks, that was helpful.", "route": "direct", "expected_sources": []}
