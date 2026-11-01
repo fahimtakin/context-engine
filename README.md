@@ -168,6 +168,8 @@ npm install
 npm run dev
 ```
 
+Then open `http://localhost:3000`.
+
 ## Using it from Claude Desktop (MCP)
 
 Add ContextEngine to `claude_desktop_config.json`:
@@ -212,7 +214,7 @@ All settings are environment variables (or `.env`); see `.env.example`.
 | `REDIS_HOST`, `REDIS_PORT` | `127.0.0.1`, `6380` | Checkpoint store |
 | `RETRIEVAL_K` | `4` | Chunks retrieved per search |
 | `MAX_RETRIEVAL_RETRIES` | `1` | Query rewrites before falling back to web search |
-| `CORS_ORIGINS` | `["http://localhost:5173", ...]` | Allowed browser origins (JSON list) |
+| `CORS_ORIGINS` | `["http://localhost:3000", ...]` | Allowed browser origins (JSON list) |
 
 ## Testing
 
