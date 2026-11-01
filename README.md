@@ -56,7 +56,7 @@ flowchart LR
     ING[Ingestion: folder or Git repo] -->|chunks + embeddings| Q
 ```
 
-**Request flow:** a question arrives through the API or MCP. The router classifies it. On the retrieval path, the top-k chunks from Qdrant are graded one by one; only relevant chunks reach the generator. If none survive, the query is rewritten and retrieval runs again (default: one rewrite), then web search takes over. The generator answers from the kept context and returns its sources, and the turn is checkpointed to Redis under the session's `thread_id`.
+**Request flow:** a question arrives through the API or MCP. The router classifies it. On the retrieval path, the top-k chunks from Qdrant are each graded for relevance (concurrently, when Ollama serves parallel requests); only relevant chunks reach the generator. If none survive, the query is rewritten and retrieval runs again (default: one rewrite), then web search takes over. The generator answers from the kept context and returns its sources, and the turn is checkpointed to Redis under the session's `thread_id`.
 
 **Ingestion flow:** files are loaded, split with `RecursiveCharacterTextSplitter` (1000-character chunks), embedded with `mxbai-embed-large` (1024 dimensions) and stored in Qdrant with cosine distance.
 
@@ -214,6 +214,7 @@ All settings are environment variables (or `.env`); see `.env.example`.
 | `REDIS_HOST`, `REDIS_PORT` | `127.0.0.1`, `6380` | Checkpoint store |
 | `RETRIEVAL_K` | `4` | Chunks retrieved per search |
 | `MAX_RETRIEVAL_RETRIES` | `1` | Query rewrites before falling back to web search |
+| `GRADER_CONCURRENCY` | `4` | Relevance checks sent at once (set `OLLAMA_NUM_PARALLEL` for Ollama to run them in parallel) |
 | `CORS_ORIGINS` | `["http://localhost:3000", ...]` | Allowed browser origins (JSON list) |
 
 ## Testing
@@ -235,33 +236,45 @@ The tests cover the corrective loop (relevant on first try, rewrite then hit, fa
 - **Router accuracy:** share of questions sent to the labelled route
 - **Baseline retrieval:** plain top-k search, hit rate, MRR and context precision
 - **Corrective retrieval:** the grade, rewrite and re-retrieve loop, hit rate, context precision and web fallback rate
+- **Answers:** groundedness (every claim supported by the context) and answer relevance, judged by the LLM, plus end-to-end agent latency
 
 ```bash
-python -m evaluation.run_eval               # index the repo, then evaluate
-python -m evaluation.run_eval --skip-index  # reuse the eval collection
+python -m evaluation.run_eval                 # index the repo, then evaluate
+python -m evaluation.run_eval --skip-index    # reuse the eval collection
+python -m evaluation.run_eval --skip-answers  # retrieval metrics only (much faster)
 ```
 
 Results are printed and saved to `evaluation/results.json`.
 
-Results from a local run (Llama 3.1 8B and mxbai-embed-large via Ollama, k = 4, one rewrite allowed; 22 questions, 18 of them retrieval questions):
+Results from a local run (Llama 3.1 8B and mxbai-embed-large via Ollama, k = 4, one rewrite allowed; 22 questions, 18 of them retrieval questions; consumer GPU with the model partly offloaded to CPU):
 
 | Metric | Baseline (top-4) | Corrective loop |
 |---|---|---|
-| Hit rate | 94.4% | 94.4% |
-| Context precision | 55.6% | 65.7% |
-| MRR | 0.810 | |
+| Hit rate | 94.4% | 88.9% |
+| Context precision | 56.9% | 60.8% |
+| MRR | 0.815 | |
 | Router accuracy | 100% | |
+| Answer groundedness | | 94.4% |
+| Answer relevance | | 88.9% |
+| Agent latency p50 / p95 | | 33.6 s / 60.9 s |
 | Rewrites per question | | 0.06 |
-| Web fallback rate | | 0% |
+| Web fallback rate | | 5.6% |
 
-The corrective loop keeps the same hit rate while removing irrelevant chunks before generation, raising context precision by about 10 points. The one miss in both columns asks for the default number of retrieved chunks; retrieval returned the README's configuration table rather than `config.py`.
+What the numbers show:
+
+- **The loop trades a little recall for precision.** Grading removes irrelevant chunks (precision 56.9% to 60.8%; between 59.8% and 65.7% across three runs), but in this run the grader rejected three correct chunks for one question, the rewrite did not recover them, and the agent fell back to the web. A cross-encoder reranker would be faster and likely more reliable than per-chunk LLM grading.
+- **Most remaining failures are chunking, not reasoning.** Questions such as "what is the largest file size that gets indexed?" retrieve the code that *uses* a constant but not the chunk that *defines* it, so the model correctly answers that the value is not in its context. Hybrid (keyword plus vector) search or code-aware chunking would target this.
+- **The eval caught a prompt regression the unit tests could not.** A general "say you could not find it" instruction dropped groundedness to 77.8%; an A/B test at temperature 0 confirmed the cause, and moving the instruction into the not-found path restored it.
+- With 18 retrieval questions, one question moves a rate by about 5.6 points, and the judge is the same model that writes the answers, so treat these as regression signals rather than benchmarks.
 
 ## Roadmap
 
 - [x] Self-correction loop: grade retrieved chunks, rewrite and retry, fall back to web search
 - [x] Retrieval evaluation on a fixed question set
 - [x] Automated tests and CI with GitHub Actions
-- [ ] Answer-level checks (groundedness and answer relevance) in the evaluation
+- [x] Answer-level checks (groundedness and answer relevance) in the evaluation
+- [ ] Cross-encoder reranking in place of per-chunk LLM grading
+- [ ] Hybrid keyword and vector search for exact identifiers in code
 - [ ] Streaming responses to the UI
 - [ ] Per-repository collections and metadata filtering
 

@@ -4,18 +4,26 @@
     "retrieval_questions": 18,
     "router_accuracy": 1.0,
     "baseline_hit_rate": 0.9444444444444444,
-    "baseline_mrr": 0.8101851851851852,
-    "baseline_precision": 0.5555555555555556,
-    "corrective_hit_rate": 0.9444444444444444,
-    "corrective_precision": 0.6574074074074074,
-    "web_fallback_rate": 0.0,
-    "avg_retries": 0.05555555555555555
+    "baseline_mrr": 0.8148148148148148,
+    "baseline_precision": 0.5694444444444444,
+    "corrective_hit_rate": 0.8888888888888888,
+    "corrective_precision": 0.607843137254902,
+    "web_fallback_rate": 0.05555555555555555,
+    "avg_retries": 0.05555555555555555,
+    "groundedness": 0.9444444444444444,
+    "answer_relevance": 0.8888888888888888,
+    "latency_p50_seconds": 33.58,
+    "latency_p95_seconds": 60.87
   },
   "rows": [
     {
       "question": "Where is the FastAPI chat endpoint defined?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The FastAPI chat endpoint is defined in the following code block:\n\n[Source: app/main.py]\n@app.post(\"/api/chat\", response_model=ChatResponse)\nasync def chat(payload: ChatRequest, request: Request) -> ChatResponse:\n    thread_id = payload.thread_id or str(uuid.uuid4())\n    config = {\"configurable\": {\"thread_id\": thread_id}}\n    inputs = {\"messages\": [HumanMessage(content=payload.message)]}\n    try:\n        state = await request.app.state.agent.ainvoke(inputs, config=config)\n    except Exception as err:\n        logger.exception(\"Agent run failed for thread %s\", thread_id)\n        raise HTTPException(status_code=500, detail=\"The agent failed to answer.\") from err\n\n    return ChatResponse(\n        response=state.get(\"final_output\", \"\"),\n        thread_id=thread_id,\n        router_decision=state.get(\"router_decision\", \"vector_db\"),\n        sources=state.get(\"sources\", []),\n        retries=state.get(\"retry_count\", 0),\n        used_web_fallback=state.get(\"used_web_fallback\", False),\n    )",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 60.87,
       "baseline_sources": [
         "app/main.py",
         "app/main.py",
@@ -35,16 +43,20 @@
       "corrective_precision": 1.0,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 60.94
+      "seconds": 66.23
     },
     {
       "question": "How does the agent decide whether to rewrite the query or fall back to web search?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The agent does not explicitly decide whether to rewrite the query or fall back to web search. However, the `rewrite_query_node` function attempts to rewrite the query using a Large Language Model (LLM) and retries the original question if the rewriting fails. If the rewriting is successful, the rewritten query is used; otherwise, the original question is used. There is no explicit fallback to web search in this code snippet. \n\n[Source: app/agents/nodes.py]",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 29.35,
       "baseline_sources": [
         "app/agents/nodes.py",
-        "app/agents/nodes.py",
         "app/agents/state.py",
+        "app/agents/nodes.py",
         "app/agents/nodes.py"
       ],
       "baseline_hit": true,
@@ -52,19 +64,22 @@
       "baseline_precision": 0.75,
       "corrective_sources": [
         "app/agents/nodes.py",
-        "app/agents/nodes.py",
         "app/agents/nodes.py"
       ],
       "corrective_hit": true,
       "corrective_precision": 1.0,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 14.81
+      "seconds": 35.29
     },
     {
       "question": "Which nodes and edges make up the LangGraph workflow?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The LangGraph workflow is composed of the following nodes and edges:\n\nNodes:\n- router\n- retrieve\n- grade\n- rewrite\n- web_search\n- generate\n\nEdges:\n- START -> router\n- router -> retrieve (vector_db)\n- router -> web_search (web_search)\n- router -> generate (direct)\n- retrieve -> grade\n- grade -> generate (relevant docs)\n- grade -> rewrite (none, retries left)\n- rewrite -> retrieve\n- web_search -> generate\n- generate -> END",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 37.43,
       "baseline_sources": [
         "app/agents/graph.py",
         "app/agents/graph.py",
@@ -84,34 +99,43 @@
       "corrective_precision": 0.5,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 16.38
+      "seconds": 42.66
     },
     {
       "question": "What happens to conversation memory if Redis is down when the API starts?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "If Redis is down when the API starts, conversation memory will not survive restarts. This is because the code uses an in-memory checkpointer (MemorySaver) as a fallback when Redis is unavailable. \n\n[Source: app/agents/graph.py]\n            except Exception:\n                logger.warning(\n                    \"Redis unavailable at %s; using in-memory checkpointer \"\n                    \"(conversation memory will not survive restarts)\",\n                    settings.redis_url,\n                    exc_info=True,\n                )\n                saver = MemorySaver()",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 32.01,
       "baseline_sources": [
         "app/agents/graph.py",
+        "app/core/config.py",
         "README.md",
-        "app/main.py",
         "app/main.py"
       ],
       "baseline_hit": true,
       "baseline_rr": 1.0,
       "baseline_precision": 0.25,
       "corrective_sources": [
-        "app/agents/graph.py"
+        "app/agents/graph.py",
+        "app/core/config.py"
       ],
       "corrective_hit": true,
-      "corrective_precision": 1.0,
+      "corrective_precision": 0.5,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 16.02
+      "seconds": 36.29
     },
     {
       "question": "Which fields does the agent state track for each turn?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The agent state tracks the following fields for each turn:\n\n1. `messages`\n2. `question`\n3. `search_query`\n4. `retrieved_docs`\n5. `retry_count`\n6. `used_web_fallback`\n7. `sources`\n\nThese fields are reset at the start of each turn by the router node.",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 29.5,
       "baseline_sources": [
         "run_agent.py",
         "app/agents/nodes.py",
@@ -131,37 +155,45 @@
       "corrective_precision": 0.25,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 14.43
+      "seconds": 34.41
     },
     {
       "question": "How does ContextEngine find Ollama when it runs inside a Docker container?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "ContextEngine finds Ollama when running inside a Docker container by using the `_HOST_GATEWAYS` list in `app/core/llm.py`. This list contains common addresses that can reach the Docker host from inside a container. \n\nWhen running inside a container, ContextEngine checks if the `.dockerenv` file exists or if the `DOCKER_CONTAINER` environment variable is set to `true`. If either condition is met, it attempts to connect to Ollama using the host and port specified in the `OLLAMA_BASE_URL` environment variable. \n\nIf the connection is successful, it uses the discovered host and port to connect to Ollama. \n\n[Source: app/core/llm.py]",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 47.99,
       "baseline_sources": [
         "README.md",
         "README.md",
-        "README.md",
-        "app/core/llm.py"
+        "app/core/llm.py",
+        "README.md"
       ],
       "baseline_hit": true,
-      "baseline_rr": 0.25,
+      "baseline_rr": 0.3333333333333333,
       "baseline_precision": 0.25,
       "corrective_sources": [
         "README.md",
         "README.md",
-        "README.md",
-        "app/core/llm.py"
+        "app/core/llm.py",
+        "README.md"
       ],
       "corrective_hit": true,
       "corrective_precision": 0.25,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 16.12
+      "seconds": 54.27
     },
     {
       "question": "How many chunks are retrieved from the vector store per query by default?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The default number of chunks retrieved from the vector store per query is not explicitly mentioned in the provided context. However, based on the retrieval path described, it appears that the top-k chunks are graded one by one, and only relevant chunks reach the generator. The exact number of chunks retrieved is not specified.",
+      "grounded": true,
+      "answer_relevant": false,
+      "agent_seconds": 27.37,
       "baseline_sources": [
         "app/services/git_ingestion.py",
         "app/db/qdrant_client.py",
@@ -180,36 +212,44 @@
       "corrective_precision": 0.0,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 13.87
+      "seconds": 31.68
     },
     {
       "question": "How many query rewrites happen before the agent uses web search?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The number of query rewrites before the agent uses web search is configurable. However, based on the provided code, it appears that the agent will retry rewriting the query up to a certain limit before falling back to web search. Unfortunately, the specific limit is not explicitly stated in the provided code snippet. \n\nHowever, the `retry_count` variable is incremented each time the query is rewritten, and the agent logs a message indicating the retry count. This suggests that the limit is configurable and can be set to a specific value. \n\nTo determine the exact limit, I would need more context or information about the configuration settings. \n\n[Source: app/agents/nodes.py]",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 38.07,
       "baseline_sources": [
         "app/agents/nodes.py",
-        "app/agents/nodes.py",
         "README.md",
-        "app/agents/state.py"
+        "app/agents/state.py",
+        "app/agents/nodes.py"
       ],
       "baseline_hit": true,
       "baseline_rr": 1.0,
       "baseline_precision": 0.5,
       "corrective_sources": [
         "app/agents/nodes.py",
-        "app/agents/nodes.py",
-        "README.md"
+        "README.md",
+        "app/agents/nodes.py"
       ],
       "corrective_hit": true,
       "corrective_precision": 0.6666666666666666,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 14.73
+      "seconds": 46.04
     },
     {
       "question": "Which repository URLs are rejected when indexing a Git repo, and why?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "According to the source code in `app/services/git_ingestion.py`, repository URLs that are rejected when indexing a Git repo are:\n\n* `file://` URLs\n* `ssh` URLs\n* Bare paths (i.e., URLs without a hostname or path)\n\nThese types of URLs are rejected because they are not https URLs with a host, as specified in the `validate_repo_url` function. This is done to prevent the clone endpoint from being used to read files on the server or reach internal services.",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 35.56,
       "baseline_sources": [
         "app/services/git_ingestion.py",
         "app/main.py",
@@ -229,12 +269,16 @@
       "corrective_precision": 0.5,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 16.21
+      "seconds": 39.88
     },
     {
       "question": "Which directories are skipped when collecting files for ingestion?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "When collecting files for ingestion, the following directories are skipped:\n\n* Ignored directories (as specified by the `ignored_dirs` parameter in the `collect_documents` function)\n* Virtual environment directories (identified by the presence of a `pyvenv.cfg` file)\n\nThese directories are skipped to prevent unnecessary processing and to ensure that the ingestion process only considers relevant files. \n\n[Source: app/services/ingestion.py]",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 28.46,
       "baseline_sources": [
         "app/services/ingestion.py",
         "app/services/ingestion.py",
@@ -254,12 +298,16 @@
       "corrective_precision": 0.75,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 17.39
+      "seconds": 33.58
     },
     {
       "question": "What is the largest file size that gets indexed?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The largest file size that gets indexed is MAX_FILE_BYTES, which is not explicitly defined in the provided context. However, it is used in the following line of code:\n\n`if path.stat().st_size > MAX_FILE_BYTES: continue`\n\nTo determine the value of MAX_FILE_BYTES, I would need to look at the surrounding code or the project's configuration. \n\n[Source: app/services/ingestion.py]",
+      "grounded": false,
+      "answer_relevant": false,
+      "agent_seconds": 33.79,
       "baseline_sources": [
         "app/services/git_ingestion.py",
         "app/services/ingestion.py",
@@ -278,12 +326,16 @@
       "corrective_precision": 1.0,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 14.9
+      "seconds": 39.38
     },
     {
       "question": "What tools does the MCP server expose to Claude Desktop?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The MCP server exposes ContextEngine as tools for Claude Desktop (stdio transport).",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 20.53,
       "baseline_sources": [
         "app/mcp/server.py",
         "README.md",
@@ -303,12 +355,16 @@
       "corrective_precision": 1.0,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 16.01
+      "seconds": 26.28
     },
     {
       "question": "Why does the MCP server write its logs to stderr instead of stdout?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The MCP server writes its logs to stderr instead of stdout because it uses stdout for the JSON-RPC stream. This is mentioned in the logging setup code in `app/core/logging_setup.py`:\n\n\"Everything goes to stderr: the MCP server talks JSON-RPC over stdout, so a stray print() to stdout would corrupt the protocol stream.\"\n\nThis ensures that the server's logs do not interfere with the JSON-RPC stream, which is carried over stdout.",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 33.58,
       "baseline_sources": [
         "app/core/logging_setup.py",
         "README.md",
@@ -328,12 +384,16 @@
       "corrective_precision": 0.75,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 14.85
+      "seconds": 38.66
     },
     {
       "question": "How is the Qdrant collection created and which distance metric does it use?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The Qdrant collection is created in the `init_qdrant_collection` function, located in the `app/db/qdrant_client.py` file.\n\nAccording to the code, the collection is created with the following settings:\n\n* Collection name: `settings.QDRANT_COLLECTION`\n* Vectors configuration: `VectorParams(size=settings.EMBEDDING_DIMENSIONS, distance=Distance.COSINE)`\n\nThis means that the collection uses the cosine distance metric.",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 35.29,
       "baseline_sources": [
         "app/db/qdrant_client.py",
         "app/db/qdrant_client.py",
@@ -353,12 +413,16 @@
       "corrective_precision": 0.5,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 13.93
+      "seconds": 39.93
     },
     {
       "question": "What does the readiness endpoint check?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The readiness endpoint checks the health of three services: Qdrant, Ollama, and the checkpointer. \n\nSource paths used: `app/main.py`",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 21.71,
       "baseline_sources": [
         "README.md",
         "app/main.py",
@@ -378,59 +442,69 @@
       "corrective_precision": 0.5,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 13.9
+      "seconds": 26.58
     },
     {
       "question": "How do I connect ContextEngine to Claude Desktop?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "To connect ContextEngine to Claude Desktop, you need to add it to your `claude_desktop_config.json` file. \n\nAccording to the README.md, you should add the following configuration:\n\n```json\n{\n  \"mcpServers\": {\n    \"context-engine\": {\n      \"command\": \"python\",\n      \"args\": [\"/absolute/path/to/context-engine/app/mcp/server.py\"]\n    }\n  }\n}\n```\n\nThis configuration tells Claude Desktop how to connect to the ContextEngine MCP server.",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 33.09,
       "baseline_sources": [
         "README.md",
-        "README.md",
         "app/mcp/server.py",
-        "run_api.py"
+        "run_api.py",
+        "README.md"
       ],
       "baseline_hit": true,
       "baseline_rr": 1.0,
       "baseline_precision": 0.5,
       "corrective_sources": [
         "README.md",
-        "README.md",
         "app/mcp/server.py",
-        "run_api.py"
+        "run_api.py",
+        "README.md"
       ],
       "corrective_hit": true,
       "corrective_precision": 0.5,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 13.4
+      "seconds": 38.39
     },
     {
       "question": "What happens when the grader cannot reach the language model?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "I couldn't find any information about the grader being unable to reach the language model in the provided context. It's possible that this is a specific scenario or implementation detail that is not documented or indexed. If you could provide more context or information about the grader and the language model, I may be able to help you better.\n\nHowever, I would suggest indexing the documents or repository that contain information about the grader and the language model. This would allow me to provide more accurate and helpful responses in the future.",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 41.58,
       "baseline_sources": [
         "app/agents/nodes.py",
         "app/agents/nodes.py",
         "app/agents/nodes.py",
-        "app/services/ingestion.py"
+        "app/agents/nodes.py"
       ],
       "baseline_hit": true,
       "baseline_rr": 1.0,
-      "baseline_precision": 0.75,
-      "corrective_sources": [
-        "app/agents/nodes.py"
-      ],
-      "corrective_hit": true,
-      "corrective_precision": 1.0,
-      "web_fallback": false,
+      "baseline_precision": 1.0,
+      "corrective_sources": [],
+      "corrective_hit": false,
+      "corrective_precision": null,
+      "web_fallback": true,
       "retries": 1,
-      "seconds": 26.82
+      "seconds": 45.78
     },
     {
       "question": "Where is the in-memory checkpointer fallback implemented?",
       "expected_route": "vector_db",
       "route": "vector_db",
+      "answer": "The in-memory checkpointer fallback is implemented in the `app/agents/graph.py` file. Specifically, it's in the `open_checkpointer` function, where it catches any exceptions that occur when trying to establish a Redis checkpointer, and then creates an instance of `MemorySaver` instead. \n\n[Source: app/agents/graph.py]\n```python\ntry:\n    saver = await stack.enter_async_context(\n                AsyncRedisSaver.from_conn_string(settings.redis_url)\n            )\n            await saver.asetup()\n            logger.info(\"Using Redis checkpointer at %s\", settings.redis_url)\n        except Exception:\n            logger.warning(\n                \"Redis unavailable at %s; using in-memory checkpointer \"\n                \"(conversation memory will not survive restarts)\",\n                settings.redis_url,\n                exc_info=True,\n            )\n            saver = MemorySaver()\n```",
+      "grounded": true,
+      "answer_relevant": true,
+      "agent_seconds": 46.76,
       "baseline_sources": [
         "app/agents/graph.py",
         "app/agents/graph.py",
@@ -449,19 +523,19 @@
       "corrective_precision": 0.6666666666666666,
       "web_fallback": false,
       "retries": 0,
-      "seconds": 13.53
+      "seconds": 52.3
     },
     {
       "question": "What is the latest stable release of Python?",
       "expected_route": "web_search",
       "route": "web_search",
-      "seconds": 2.97
+      "seconds": 3.11
     },
     {
       "question": "What were today's top technology news headlines?",
       "expected_route": "web_search",
       "route": "web_search",
-      "seconds": 3.1
+      "seconds": 3.4
     },
     {
       "question": "Hi there!",
@@ -477,7 +551,7 @@
     }
   ],
   "meta": {
-    "run_at": "2026-11-01T03:20:49+00:00",
+    "run_at": "2026-11-01T04:31:21+00:00",
     "llm_model": "llama3.1",
     "embedding_model": "mxbai-embed-large",
     "k": 4,
