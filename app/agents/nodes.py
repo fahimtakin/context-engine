@@ -80,15 +80,19 @@ GENERATOR_PROMPT = (
     "documents and codebases.\n"
     "- When context is provided, base your answer on it and mention the source paths you used.\n"
     "- If the context does not contain the answer, say so plainly instead of guessing.\n"
-    "- If the context says nothing relevant was found, tell the user you could not find "
-    "the answer and suggest indexing the documents or repository that contain it.\n"
     "- When no context is provided (greetings or small talk), reply briefly and naturally.\n\n"
     "Context:\n{context}"
 )
 
-# Shown to the generator when a lookup ran but returned nothing, so it does not answer
-# as if the question were small talk.
-NOTHING_FOUND = "(nothing relevant was found in the knowledge base or on the web)"
+# Used as the context when a lookup ran but returned nothing, so the model does not answer
+# as if the question were small talk. The instruction lives here rather than in the prompt
+# because a general "say you could not find it" rule made the model give up on questions
+# its context did answer.
+NOTHING_FOUND = (
+    "(Nothing relevant was found in the knowledge base or on the web. Tell the user you "
+    "could not find the answer and suggest indexing the documents or repository that "
+    "contain it.)"
+)
 
 _SMALL_TALK = {
     "hello",
