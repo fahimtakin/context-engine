@@ -1,36 +1,30 @@
-# run_agent.py
+"""Two-turn demo of the agent from the command line, showing memory across turns."""
+
 import asyncio
+
 from langchain_core.messages import HumanMessage
-from app.agents.graph import agent_brain, redis_saver_context
 
-async def run_conversation():
-    async with redis_saver_context as saver:
-        
-        # Configure our Session/Thread ID tracking block
-        config = {
-            "configurable": {
-                "thread_id": "production-simulation-2026"
-            },
-            "checkpointer": saver
-        }
+from app.agents.graph import compile_agent, open_checkpointer
+from app.core.config import settings
+from app.core.logging_setup import configure_logging
 
-        # --- Turn 1: Introduction ---
-        print("\n=== Turn 1: Introducing Ourselves ===")
-        # On the very first turn, we pass the initial state setup dictionary
-        input_1 = {"messages": [HumanMessage(content="Hello! My name is Alex and I am a software engineer interviewing for an AI role.")]}
-        
-        output_1 = await agent_brain.ainvoke(input_1, config=config)
-        print(f"Agent Response:\n{output_1.get('final_output')}\n")
+TURNS = [
+    "Hello! My name is Alex and I am a software engineer interviewing for an AI role.",
+    "What was my name again, and what role am I pursuing?",
+]
 
-        # --- Turn 2: The Follow-Up Question ---
-        print("=== Turn 2: Testing Multi-Turn Context ===")
-        # Instead of passing a manual, empty history block, 
-        # we pass *only* the new message inside the update payload dictionary. 
-        # LangGraph will pull the historic 'messages' list automatically out of Redis!
-        input_2 = {"messages": [HumanMessage(content="What was my name again, and what role am I pursuing?")]}
-        
-        output_2 = await agent_brain.ainvoke(input_2, config=config)
-        print(f"Agent Response:\n{output_2.get('final_output')}\n")
+
+async def main() -> None:
+    configure_logging(settings.LOG_LEVEL)
+    config = {"configurable": {"thread_id": "cli-demo"}}
+    async with open_checkpointer() as saver:
+        agent = compile_agent(saver)
+        for i, text in enumerate(TURNS, start=1):
+            state = await agent.ainvoke({"messages": [HumanMessage(content=text)]}, config=config)
+            print(f"\n=== Turn {i} [{state.get('router_decision')}] ===")
+            print(f"You:   {text}")
+            print(f"Agent: {state.get('final_output')}")
+
 
 if __name__ == "__main__":
-    asyncio.run(run_conversation())
+    asyncio.run(main())

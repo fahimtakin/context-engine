@@ -1,130 +1,284 @@
-# app/agents/nodes.py
-import json
-import os
-import sys
+"""Graph nodes for the ContextEngine agent.
+
+Turn flow (corrective RAG):
+
+    router ─┬─ vector_db ─> retrieve ─> grade ─┬─ relevant docs ──────────────> generate
+            │                                  ├─ none, retries left ─> rewrite ─> retrieve
+            │                                  └─ none, no retries ───> web_search ─> generate
+            ├─ web_search ──────────────────────────────────────────> web_search ─> generate
+            └─ direct ──────────────────────────────────────────────────────────> generate
+"""
+
+import logging
+import re
+from typing import Literal
+
+from duckduckgo_search import DDGS
+from langchain_core.documents import Document
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage 
-from langchain_qdrant import QdrantVectorStore
-from langchain_ollama import OllamaEmbeddings
-from duckduckgo_search import DDGS 
-from app.core.llm import MockLLM, get_llm, resolve_ollama_endpoint
+
+from app.agents.state import AgentState, RetrievedDoc
 from app.core.config import settings
-from app.db.qdrant_client import COLLECTION_NAME
-from app.agents.state import AgentState
+from app.core.llm import get_llm
+from app.db.qdrant_client import get_vector_store
+
+logger = logging.getLogger(__name__)
+
+LLM_UNAVAILABLE_MESSAGE = (
+    "The language model is unavailable right now, so I can't write an answer. "
+    "Check that Ollama is running and reachable."
+)
+
+
+# --------------------------------------------------------------------------- schemas
+
 
 class RouteDecision(BaseModel):
-    choice: str = Field(description="Must be exactly 'vector_db', 'web_search', or 'direct'")
-
-def get_embeddings_engine() -> OllamaEmbeddings:
-    resolved_url = resolve_ollama_endpoint()
-    return OllamaEmbeddings(base_url=resolved_url, model="mxbai-embed-large")
-
-def get_vector_store() -> QdrantVectorStore:
-    """
-    Safely retrieves the active Qdrant vector store collection.
-    Dynamically maps host names depending on the running container state.
-    """
-    if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER") == "true":
-        host_target = "qdrant"
-    else:
-        host_target = settings.QDRANT_HOST
-        
-    port_target = settings.QDRANT_PORT 
-    qdrant_url = f"http://{host_target}:{port_target}"
-    embeddings = get_embeddings_engine()
-    
-    return QdrantVectorStore.from_existing_collection(
-        embedding=embeddings,
-        collection_name=COLLECTION_NAME,
-        url=qdrant_url,
-        timeout=30.0 
+    choice: Literal["vector_db", "web_search", "direct"] = Field(
+        description="vector_db for questions about the indexed documents or code, "
+        "web_search for current events or general facts not in the index, "
+        "direct for greetings and small talk."
     )
 
-def custom_web_search(query: str) -> str:
+
+class GradeDecision(BaseModel):
+    relevant: bool = Field(description="True if the document helps answer the question.")
+
+
+class RewrittenQuery(BaseModel):
+    query: str = Field(description="A clearer search query for the same question.")
+
+
+# --------------------------------------------------------------------------- prompts
+
+ROUTER_PROMPT = (
+    "You route questions for an assistant that answers from an indexed knowledge base of "
+    "documents and source code. Choose exactly one route:\n"
+    "- vector_db: the question is about the indexed documents, a codebase, files, functions, "
+    "architecture, or anything that could be answered from them.\n"
+    "- web_search: the question needs current or external information (news, releases, "
+    "prices, general world facts) that a private knowledge base would not contain.\n"
+    "- direct: greetings, thanks, or small talk that needs no lookup.\n"
+    "When unsure, choose vector_db."
+)
+
+GRADER_PROMPT = (
+    "You check whether a retrieved document is relevant to a user's question. "
+    "Answer relevant=true if the document contains information that helps answer the "
+    "question, even partially. Answer relevant=false if it is about something else."
+)
+
+REWRITE_PROMPT = (
+    "A search over a knowledge base of documents and source code returned nothing relevant "
+    "for the question below. Rewrite it as a better search query: use concrete keywords, "
+    "likely file, function or component names, and drop filler words. Keep the meaning."
+)
+
+GENERATOR_PROMPT = (
+    "You are ContextEngine, an assistant that answers questions about the user's indexed "
+    "documents and codebases.\n"
+    "- When context is provided, base your answer on it and mention the source paths you used.\n"
+    "- If the context does not contain the answer, say so plainly instead of guessing.\n"
+    "- When no context is provided (greetings or small talk), reply briefly and naturally.\n\n"
+    "Context:\n{context}"
+)
+
+_SMALL_TALK = {
+    "hello",
+    "hi",
+    "hey",
+    "greetings",
+    "yo",
+    "sup",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "thanks",
+    "thank you",
+    "who are you",
+}
+
+
+# --------------------------------------------------------------------------- helpers
+
+
+def latest_user_message(state: AgentState) -> str:
+    for message in reversed(state.get("messages", [])):
+        if isinstance(message, HumanMessage):
+            return str(message.content)
+    return ""
+
+
+def is_small_talk(text: str) -> bool:
+    """Match greetings as whole words, so 'high availability' is not mistaken for 'hi'."""
+    cleaned = re.sub(r"[^\w\s]", "", text.lower()).strip()
+    return any(cleaned == phrase or cleaned.startswith(phrase + " ") for phrase in _SMALL_TALK)
+
+
+def to_retrieved(doc: Document) -> RetrievedDoc:
+    meta = doc.metadata or {}
+    source = meta.get("source") or meta.get("file_path") or "unknown"
+    repo = meta.get("repo_url")
+    if repo:
+        source = f"{repo}:{source}"
+    return {"source": str(source), "content": doc.page_content}
+
+
+def format_context(docs: list[RetrievedDoc]) -> str:
+    if not docs:
+        return "(no context)"
+    return "\n\n".join(f"[Source: {d['source']}]\n{d['content']}" for d in docs)
+
+
+def unique_sources(docs: list[RetrievedDoc]) -> list[str]:
+    return list(dict.fromkeys(d["source"] for d in docs))
+
+
+def search_web(query: str, max_results: int) -> list[RetrievedDoc]:
     try:
         with DDGS() as ddgs:
-            results = [r for r in ddgs.text(query, max_results=3)]
-            if not results:
-                return "No search results found."
-            return "\n\n".join([f"Title: {r['title']}\nSnippet: {r['body']}" for r in results])
-    except Exception as e:
-        return f"Web search tool execution failed: {str(e)}"
+            results = list(ddgs.text(query, max_results=max_results))
+    except Exception:
+        logger.warning("Web search failed for %r", query, exc_info=True)
+        return []
+    return [
+        {"source": r.get("href") or "web", "content": f"{r.get('title', '')}\n{r.get('body', '')}"}
+        for r in results
+    ]
+
+
+# --------------------------------------------------------------------------- nodes
+
 
 def router_node(state: AgentState) -> dict:
-    last_message = state["messages"][-1].content
-    cleaned_msg = str(last_message).lower().strip().replace("?", "").replace("!", "")
-    
-    # Absolute conversational greetings guard to prevent routing simple greetings to Web Search
-    greetings = {
-        "hello", "hi", "hey", "greetings", "yo", "sup", "good morning", 
-        "good afternoon", "good evening", "test", "clear", "who are you"
+    question = latest_user_message(state)
+    # Reset every per-turn field so nothing from the previous turn leaks into this one.
+    turn = {
+        "question": question,
+        "search_query": question,
+        "retrieved_docs": [],
+        "retry_count": 0,
+        "used_web_fallback": False,
+        "sources": [],
     }
-    
-    if cleaned_msg in greetings or any(cleaned_msg.startswith(g) for g in greetings):
-        return {"router_decision": "direct"}    
-            
-    decision = "vector_db"
+
+    if is_small_talk(question):
+        return {**turn, "router_decision": "direct"}
+
     try:
-        llm = get_llm()
-        try:
-            structured_llm = llm.with_structured_output(RouteDecision)
-            result = structured_llm.invoke([
-                SystemMessage(content="Classify query into: 'vector_db', 'web_search', or 'direct'"),
-                HumanMessage(content=last_message)
-            ])
-            decision = result.choice
-        except Exception as net_err:
-            print(f"Hostname resolution dropped during routing. Activating Mock Structured fallback. Error: {str(net_err)}", flush=True)
-            mock_engine = MockLLM().with_structured_output(RouteDecision)
-            result = mock_engine.invoke([HumanMessage(content=last_message)])
-            decision = result.choice
-            
-    except Exception as e:
-        print(f"Top level router fallback activated. Defaulting to vector_db. Error: {str(e)}", flush=True)
+        decision = (
+            get_llm()
+            .with_structured_output(RouteDecision)
+            .invoke([SystemMessage(content=ROUTER_PROMPT), HumanMessage(content=question)])
+            .choice
+        )
+    except Exception:
+        logger.warning("Router LLM call failed; defaulting to vector_db", exc_info=True)
         decision = "vector_db"
-        
-    return {"router_decision": decision}
 
-def vector_retriever_node(state: AgentState) -> dict:
+    logger.info("Routed question to %s", decision)
+    return {**turn, "router_decision": decision}
+
+
+def retrieve_node(state: AgentState) -> dict:
+    query = state.get("search_query") or state.get("question", "")
     try:
-        last_message = state["messages"][-1].content
-        vector_store = get_vector_store()
-        docs = vector_store.similarity_search(last_message, k=4)
-        formatted_docs = [f"Source File Path: {d.metadata.get('source')}\nOrigin Repo: {d.metadata.get('repo_url')}\nContent:\n{d.page_content}" for d in docs]
-    except Exception as e:
-        print(f"Vector db extraction drop caught: {str(e)}", flush=True)
-        formatted_docs = ["Source: Database Fallback\nContent: (Vector storage container interface timed out)"]
+        docs = get_vector_store().similarity_search(query, k=settings.RETRIEVAL_K)
+    except Exception:
+        logger.warning("Vector search failed for %r", query, exc_info=True)
+        docs = []
+    return {"retrieved_docs": [to_retrieved(d) for d in docs]}
 
-    return {"retrieved_docs": formatted_docs}
+
+def grade_documents_node(state: AgentState) -> dict:
+    """Keep only the retrieved documents the LLM judges relevant to the question."""
+    docs = state.get("retrieved_docs", [])
+    if not docs:
+        return {"retrieved_docs": []}
+
+    question = state.get("question", "")
+    try:
+        grader = get_llm().with_structured_output(GradeDecision)
+    except Exception:
+        logger.warning("Grader unavailable; keeping all retrieved documents", exc_info=True)
+        return {"retrieved_docs": docs}
+
+    relevant: list[RetrievedDoc] = []
+    for doc in docs:
+        try:
+            verdict = grader.invoke(
+                [
+                    SystemMessage(content=GRADER_PROMPT),
+                    HumanMessage(content=f"Question: {question}\n\nDocument:\n{doc['content']}"),
+                ]
+            )
+            keep = verdict.relevant
+        except Exception:
+            # Fail open: an unavailable grader should not throw away possibly good context.
+            logger.warning("Grading failed for %s; keeping it", doc["source"], exc_info=True)
+            keep = True
+        if keep:
+            relevant.append(doc)
+
+    logger.info("Grading kept %d of %d documents", len(relevant), len(docs))
+    return {"retrieved_docs": relevant}
+
+
+def rewrite_query_node(state: AgentState) -> dict:
+    question = state.get("question", "")
+    try:
+        rewritten = (
+            get_llm()
+            .with_structured_output(RewrittenQuery)
+            .invoke([SystemMessage(content=REWRITE_PROMPT), HumanMessage(content=question)])
+            .query.strip()
+        )
+    except Exception:
+        logger.warning("Query rewrite failed; retrying with the original question", exc_info=True)
+        rewritten = ""
+
+    retry_count = state.get("retry_count", 0) + 1
+    logger.info("Rewrite %d: %r -> %r", retry_count, question, rewritten or question)
+    return {"search_query": rewritten or question, "retry_count": retry_count}
+
 
 def web_search_node(state: AgentState) -> dict:
-    last_message = state["messages"][-1].content
-    results = custom_web_search(last_message)
-    return {"retrieved_docs": [f"Source: Web Search Results\nContent: {results}"]}
+    query = state.get("search_query") or state.get("question", "")
+    results = search_web(query, settings.WEB_SEARCH_RESULTS)
+    return {
+        "retrieved_docs": results,
+        "used_web_fallback": state.get("router_decision") == "vector_db",
+    }
+
 
 def generation_node(state: AgentState) -> dict:
-    context = "\n\n".join(state.get("retrieved_docs", []))
-    
-    system_prompt = (
-        "You are ContextEngine, a strict full-stack AI engineering assistant analyzing custom indexed files.\n"
-        "Analyze the user's request using ONLY the literal context blocks provided below. "
-        "CRITICAL RULE: Do not use any outside knowledge about real-world biology, books, or internet definitions. "
-        "If the user asks for an analysis, base your interpretation exclusively on the unique narrative details "
-        "found in the text (e.g., the cup of tea, the sack-like curtain, the cabin dangling from a branch, the silky orange and black wings, and the duties of the shadows).\n\n"
-        f"Provided Context Blocks:\n{context}"
-    )
-    
-    full_messages = [SystemMessage(content=system_prompt)] + state["messages"]
-    llm = get_llm()
-    
+    docs = state.get("retrieved_docs", [])
+    system = SystemMessage(content=GENERATOR_PROMPT.format(context=format_context(docs)))
     try:
-        response = llm.invoke(full_messages)
-        final_text = response.content
-    except Exception as e:
-        print(f"Ollama generation fallback triggered: {str(e)}", flush=True)
-        final_text = f"ContextEngine local execution fallback. Context data:\n{context}"
-        
+        text = str(get_llm().invoke([system, *state.get("messages", [])]).content)
+    except Exception:
+        logger.error("Generation failed", exc_info=True)
+        text = LLM_UNAVAILABLE_MESSAGE
+
     return {
-        "messages": [AIMessage(content=final_text)], 
-        "final_output": final_text
+        "messages": [AIMessage(content=text)],
+        "final_output": text,
+        "sources": unique_sources(docs),
     }
+
+
+# --------------------------------------------------------------------------- edges
+
+
+def route_after_router(state: AgentState) -> str:
+    return state.get("router_decision", "vector_db")
+
+
+def decide_after_grading(state: AgentState) -> str:
+    """The self-correction step: answer, retry with a rewritten query, or fall back to the web."""
+    if state.get("retrieved_docs"):
+        return "generate"
+    if state.get("retry_count", 0) < settings.MAX_RETRIEVAL_RETRIES:
+        return "rewrite"
+    return "web_search"

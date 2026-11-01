@@ -1,28 +1,45 @@
-# app/core/config.py
-import os
+"""Application settings, loaded from environment variables and an optional .env file."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "ContextEngine"
-    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434" 
+    LOG_LEVEL: str = "INFO"
+
+    # Ollama (LLM + embeddings)
+    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
+    LLM_MODEL: str = "llama3.1"
+    EMBEDDING_MODEL: str = "mxbai-embed-large"
+    EMBEDDING_DIMENSIONS: int = 1024
+    LLM_TIMEOUT_SECONDS: float = 45.0
+
+    # Qdrant (vector store)
     QDRANT_HOST: str = "127.0.0.1"
     QDRANT_PORT: int = 6333
+    QDRANT_COLLECTION: str = "context_engine_docs"
+
+    # Redis Stack (conversation checkpoints)
     REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6380
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    # Agent behaviour
+    RETRIEVAL_K: int = 4
+    MAX_RETRIEVAL_RETRIES: int = 1  # query rewrites before falling back to web search
+    WEB_SEARCH_RESULTS: int = 3
+
+    # API
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @property
+    def qdrant_url(self) -> str:
+        return f"http://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
+
+    @property
+    def redis_url(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
+
 
 settings = Settings()
-
-
-# Force container names strictly if executing inside a container sandbox environment
-if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER") == "true":
-    settings.OLLAMA_BASE_URL = "http://docker.internal"
-    settings.QDRANT_HOST = "qdrant"
-    settings.QDRANT_PORT = 6333
-    settings.REDIS_HOST = "redis"
-    settings.REDIS_PORT = 6379  # 🌟 Essential: Mapped internally to port 6379 inside the Docker bridge network

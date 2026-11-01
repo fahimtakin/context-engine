@@ -1,51 +1,83 @@
-# app/agents/graph.py
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver 
+"""Builds the LangGraph state machine and its Redis-backed checkpointer."""
+
+import logging
+from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack, asynccontextmanager
+
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
+
+from app.agents.nodes import (
+    decide_after_grading,
+    generation_node,
+    grade_documents_node,
+    retrieve_node,
+    rewrite_query_node,
+    route_after_router,
+    router_node,
+    web_search_node,
+)
 from app.agents.state import AgentState
-from app.agents.nodes import router_node, vector_retriever_node, web_search_node, generation_node
 from app.core.config import settings
 
-def route_conditional(state: AgentState) -> str:
-    """Evaluates router logic parameters to pick the next step."""
-    decision = state.get("router_decision")
-    if decision == "vector_db":
-        return "vector_db"
-    elif decision == "web_search":
-        return "web_search"
-    return "direct"
+logger = logging.getLogger(__name__)
 
-def create_agent_workflow() -> StateGraph:
-    """Builds the coordinated nodes state machine without global import side effects."""
+
+def build_workflow() -> StateGraph:
     workflow = StateGraph(AgentState)
 
     workflow.add_node("router", router_node)
-    workflow.add_node("vector_db", vector_retriever_node)
+    workflow.add_node("retrieve", retrieve_node)
+    workflow.add_node("grade", grade_documents_node)
+    workflow.add_node("rewrite", rewrite_query_node)
     workflow.add_node("web_search", web_search_node)
-    workflow.add_node("generator", generation_node)
+    workflow.add_node("generate", generation_node)
 
-    workflow.set_entry_point("router")
-
+    workflow.add_edge(START, "router")
     workflow.add_conditional_edges(
         "router",
-        route_conditional,
-        {
-            "vector_db": "vector_db",
-            "web_search": "web_search",
-            "direct": "generator"
-        }
+        route_after_router,
+        {"vector_db": "retrieve", "web_search": "web_search", "direct": "generate"},
     )
-
-    workflow.add_edge("vector_db", "generator")
-    workflow.add_edge("web_search", "generator")
-    workflow.add_edge("generator", END)
+    workflow.add_edge("retrieve", "grade")
+    workflow.add_conditional_edges(
+        "grade",
+        decide_after_grading,
+        {"generate": "generate", "rewrite": "rewrite", "web_search": "web_search"},
+    )
+    workflow.add_edge("rewrite", "retrieve")
+    workflow.add_edge("web_search", "generate")
+    workflow.add_edge("generate", END)
     return workflow
 
-def get_redis_saver() -> AsyncRedisSaver:
-    """Instantiates a context-managed asynchronous checkpointer channel link to Redis Stack."""
-    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
-    return AsyncRedisSaver.from_conn_string(redis_url)
 
-async def get_runtime_agent_brain(saver: AsyncRedisSaver):
-    """Compiles workflow maps bound to an active memory checkpointer instance."""
-    workflow = create_agent_workflow()
-    return workflow.compile(checkpointer=saver)
+def compile_agent(checkpointer: BaseCheckpointSaver | None = None):
+    return build_workflow().compile(checkpointer=checkpointer)
+
+
+@asynccontextmanager
+async def open_checkpointer() -> AsyncIterator[BaseCheckpointSaver]:
+    """Yield a Redis checkpointer, or an in-memory one if Redis is unreachable.
+
+    The in-memory fallback keeps the service usable without Redis, at the cost of
+    losing conversation memory on restart.
+    """
+    async with AsyncExitStack() as stack:
+        try:
+            from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+
+            saver = await stack.enter_async_context(
+                AsyncRedisSaver.from_conn_string(settings.redis_url)
+            )
+            await saver.asetup()
+            logger.info("Using Redis checkpointer at %s", settings.redis_url)
+        except Exception:
+            logger.warning(
+                "Redis unavailable at %s; using in-memory checkpointer "
+                "(conversation memory will not survive restarts)",
+                settings.redis_url,
+                exc_info=True,
+            )
+            saver = MemorySaver()
+        yield saver
