@@ -204,20 +204,26 @@ def grade_documents_node(state: AgentState) -> dict:
         logger.warning("Grader unavailable; keeping all retrieved documents", exc_info=True)
         return {"retrieved_docs": docs}
 
+    prompts = [
+        [
+            SystemMessage(content=GRADER_PROMPT),
+            HumanMessage(content=f"Question: {question}\n\nDocument:\n{doc['content']}"),
+        ]
+        for doc in docs
+    ]
+    # Grade concurrently; results come back in input order, errors as values.
+    verdicts = grader.batch(
+        prompts, config={"max_concurrency": settings.GRADER_CONCURRENCY}, return_exceptions=True
+    )
+
     relevant: list[RetrievedDoc] = []
-    for doc in docs:
-        try:
-            verdict = grader.invoke(
-                [
-                    SystemMessage(content=GRADER_PROMPT),
-                    HumanMessage(content=f"Question: {question}\n\nDocument:\n{doc['content']}"),
-                ]
-            )
-            keep = verdict.relevant
-        except Exception:
+    for doc, verdict in zip(docs, verdicts, strict=True):
+        if isinstance(verdict, Exception):
             # Fail open: an unavailable grader should not throw away possibly good context.
-            logger.warning("Grading failed for %s; keeping it", doc["source"], exc_info=True)
+            logger.warning("Grading failed for %s; keeping it", doc["source"], exc_info=verdict)
             keep = True
+        else:
+            keep = verdict.relevant
         if keep:
             relevant.append(doc)
 

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     RETRIEVAL_K: int = 4
     MAX_RETRIEVAL_RETRIES: int = 1  # query rewrites before falling back to web search
     WEB_SEARCH_RESULTS: int = 3
+    GRADER_CONCURRENCY: int = 4  # parallel relevance checks; Ollama must allow parallel requests
 
     # API
     # The UI's Vite dev server runs on 3000 (see vite.config.js); 5173 is Vite's default.

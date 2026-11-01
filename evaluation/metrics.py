@@ -1,5 +1,6 @@
 """Retrieval metrics. Pure functions, so they are unit-tested without any services."""
 
+import math
 from collections.abc import Iterable, Sequence
 
 
@@ -32,6 +33,15 @@ def precision(retrieved: Sequence[str], expected: Iterable[str]) -> float | None
 def mean(values: Iterable[float | None]) -> float | None:
     kept = [v for v in values if v is not None]
     return sum(kept) / len(kept) if kept else None
+
+
+def percentile(values: Iterable[float], q: float) -> float | None:
+    """Nearest-rank percentile (q in 0-100) of the values, or None if there are none."""
+    ordered = sorted(values)
+    if not ordered:
+        return None
+    rank = max(1, math.ceil(q / 100 * len(ordered)))
+    return ordered[rank - 1]
 
 
 def pct(value: float | None) -> str:

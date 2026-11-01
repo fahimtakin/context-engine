@@ -13,8 +13,8 @@ from app.agents.nodes import GradeDecision, RewrittenQuery, RouteDecision
 class FakeLLM:
     """Scripted stand-in for ChatOllama.
 
-    `grades` is consumed one value per grading call (True = relevant). When it runs
-    out, documents are graded relevant.
+    `grades` is consumed one value per grading call (True = relevant, an exception
+    instance = that call fails). When it runs out, documents are graded relevant.
     """
 
     def __init__(
@@ -44,10 +44,24 @@ class FakeLLM:
                 if schema is RouteDecision:
                     return RouteDecision(choice=llm.route)
                 if schema is GradeDecision:
-                    return GradeDecision(relevant=llm.grades.pop(0) if llm.grades else True)
+                    grade = llm.grades.pop(0) if llm.grades else True
+                    if isinstance(grade, Exception):
+                        raise grade
+                    return GradeDecision(relevant=grade)
                 if schema is RewrittenQuery:
                     return RewrittenQuery(query=llm.rewrite)
                 raise AssertionError(f"unexpected schema {schema}")
+
+            def batch(self, inputs, config=None, return_exceptions=False, **kwargs):
+                results = []
+                for messages in inputs:
+                    try:
+                        results.append(self.invoke(messages))
+                    except Exception as err:
+                        if not return_exceptions:
+                            raise
+                        results.append(err)
+                return results
 
         return _Structured()
 

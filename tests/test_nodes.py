@@ -5,6 +5,7 @@ from langchain_core.documents import Document
 
 from app.agents.nodes import (
     decide_after_grading,
+    grade_documents_node,
     is_small_talk,
     router_node,
     to_retrieved,
@@ -43,6 +44,22 @@ def test_router_resets_per_turn_fields(wire):
     assert update["retrieved_docs"] == []
     assert update["retry_count"] == 0
     assert update["question"] == update["search_query"] == "latest news?"
+
+
+def _docs(*sources):
+    return [{"source": s, "content": f"content of {s}"} for s in sources]
+
+
+def test_grading_keeps_relevant_docs_in_order(wire):
+    wire(llm=FakeLLM(grades=[False, True, False, True]))
+    update = grade_documents_node({"question": "q", "retrieved_docs": _docs("a", "b", "c", "d")})
+    assert [d["source"] for d in update["retrieved_docs"]] == ["b", "d"]
+
+
+def test_one_failed_grade_keeps_only_that_doc(wire):
+    wire(llm=FakeLLM(grades=[False, ConnectionError("timeout"), False]))
+    update = grade_documents_node({"question": "q", "retrieved_docs": _docs("a", "b", "c")})
+    assert [d["source"] for d in update["retrieved_docs"]] == ["b"]
 
 
 def test_decide_after_grading():
