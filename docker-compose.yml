@@ -1,48 +1,54 @@
-version: "3.8"
-
+# Local development: API + Qdrant + Redis Stack. Ollama runs on the host.
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: context_engine_api
-    restart: always
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
       - ./documents:/app/documents
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - PROJECT_NAME=ContextEngine
-      - DOCKER_CONTAINER=true
-      - OLLAMA_BASE_URL=http://docker.internal
-      - QDRANT_HOST=qdrant # Tells the app container to find Qdrant via its internal service name
-      - QDRANT_PORT=6333
-      - REDIS_HOST=redis # Tells the app container to find Redis via its internal service name
-      - REDIS_PORT=6379 #  Inside Docker, it MUST hit the internal port 6379, NOT the external 6380!
+      DOCKER_CONTAINER: "true"
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      REDIS_HOST: redis
+      REDIS_PORT: 6379 # container-internal port (published to the host as 6380)
     depends_on:
-      - qdrant
-      - redis
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: context_engine_qdrant_prod
-    restart: always
+    container_name: context_engine_qdrant
+    restart: unless-stopped
     ports:
-      - "6333:6333" # Windows connects on 6333, internal containers use 6333
+      - "6333:6333"
     volumes:
-      - qdrant_prod_data:/qdrant/storage
+      - qdrant_data:/qdrant/storage
 
   redis:
     image: redis/redis-stack-server:latest
-    container_name: context_engine_redis_prod
-    restart: always
+    container_name: context_engine_redis
+    restart: unless-stopped
     ports:
-      - "6380:6379" # Windows connects on 6380, but internal containers MUST use 6379!
+      - "6380:6379"
     volumes:
-      - redis_prod_data:/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
-  qdrant_prod_data:
-  redis_prod_data:
+  qdrant_data:
+  redis_data:

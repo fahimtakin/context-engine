@@ -1,56 +1,40 @@
-# ==========================================
-# STAGE 1: Build & Package Compilation
-# ==========================================
+# ---------- Stage 1: build wheels ----------
 FROM python:3.11-slim AS builder
 
 WORKDIR /build
-
-# Install system compilation packages and git natively inside the build sandbox
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
-    curl \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy your requirements mapping sheet early to optimize Docker layer caching
 COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Upgrade pip and compile packages globally inside the build boundary stage
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-
-# ==========================================
-# STAGE 2: Slim Production Runtime Runner
-# ==========================================
+# ---------- Stage 2: slim runtime ----------
 FROM python:3.11-slim AS runner
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-# Install git inside the runner environment so GitPython can execute commands natively
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# git is needed at runtime to clone repositories for indexing.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 8888 --create-home appuser
 
-# Create a secure, isolated non-root system process execution user
-RUN useradd -u 8888 appuser && mkdir -p /app/documents && chown -R appuser:appuser /app
-USER appuser
-
-# Copy pristine pre-compiled packages directly into the production layer path
 COPY --from=builder /install /usr/local
-COPY --from=builder /build/requirements.txt .
-
-# Copy your core custom application logic modules into the container layout scope
 COPY --chown=appuser:appuser app/ ./app
-COPY --chown=appuser:appuser run_api.py .
-COPY --chown=appuser:appuser run_ingestion.py .
+COPY --chown=appuser:appuser run_api.py run_ingestion.py ./
+RUN mkdir -p /app/documents && chown appuser:appuser /app/documents
 
-# Copy environment layout configuration sheet natively to the app sandbox layer
-COPY --chown=appuser:appuser .env . 
-
-ENV PYTHONUNBUFFERED=1
-
+# Configuration comes from environment variables (see docker-compose.yml);
+# secrets are never baked into the image.
+USER appuser
 EXPOSE 8000
 
-# Execute using standard string module format to preserve multi-worker thread spawning
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+
 CMD ["python", "run_api.py"]

@@ -1,46 +1,50 @@
+# Production-style stack: same services, but Qdrant and Redis are only reachable
+# inside the Docker network (no published ports).
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: context_engine_api
     restart: always
     ports:
-      - "0.0.0.0:8000:8000"
+      - "8000:8000"
     volumes:
       - ./documents:/app/documents
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - PROJECT_NAME=ContextEngine
-      - DOCKER_CONTAINER=true
-      - OLLAMA_BASE_URL=http://docker.internal # Direct route back to Windows host Ollama
-      - QDRANT_HOST=qdrant # Internal container service name
-      - QDRANT_PORT=6333
-      - REDIS_HOST=redis # Internal container service name
-      - REDIS_PORT=6379 # Internal port within the Docker network
+      DOCKER_CONTAINER: "true"
+      LOG_LEVEL: INFO
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
-      - qdrant
-      - redis
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: context_engine_qdrant_prod
     restart: always
-    ports:
-      - "6333:6333"
     volumes:
-      - qdrant_prod_data:/qdrant/storage
+      - qdrant_data:/qdrant/storage
 
   redis:
     image: redis/redis-stack-server:latest
-    container_name: context_engine_redis_prod
     restart: always
-    ports:
-      - "6380:6379" # Exposes 6380 to Windows while app accesses 6379 internally
     volumes:
-      - redis_prod_data:/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
-  qdrant_prod_data:
-  redis_prod_data:
+  qdrant_data:
+  redis_data:
