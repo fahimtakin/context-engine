@@ -47,6 +47,9 @@ export default function ChatConsole({
           role: "assistant",
           content: data.response,
           route: data.router_decision,
+          sources: data.sources || [],
+          retries: data.retries || 0,
+          webFallback: data.used_web_fallback || false,
         },
       ]);
     } catch (err) {
@@ -89,6 +92,20 @@ export default function ChatConsole({
               }`}
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === "assistant" && (msg.sources?.length > 0 || msg.retries > 0 || msg.webFallback) && (
+                <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] font-mono text-slate-500 space-y-1">
+                  {(msg.retries > 0 || msg.webFallback) && (
+                    <div>
+                      {msg.retries > 0 && `rewrote query ${msg.retries}x`}
+                      {msg.retries > 0 && msg.webFallback && " · "}
+                      {msg.webFallback && "fell back to web search"}
+                    </div>
+                  )}
+                  {msg.sources?.map((source) => (
+                    <div key={source} className="truncate">source: {source}</div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}
