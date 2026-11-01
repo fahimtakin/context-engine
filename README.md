@@ -241,13 +241,18 @@ python -m evaluation.run_eval --skip-index  # reuse the eval collection
 
 Results are printed and saved to `evaluation/results.json`.
 
+Results from a local run (Llama 3.1 8B and mxbai-embed-large via Ollama, k = 4, one rewrite allowed; 22 questions, 18 of them retrieval questions):
+
 | Metric | Baseline (top-4) | Corrective loop |
 |---|---|---|
-| Hit rate | _run the eval_ | _run the eval_ |
-| Context precision | _run the eval_ | _run the eval_ |
-| Router accuracy | _run the eval_ | |
+| Hit rate | 94.4% | 94.4% |
+| Context precision | 55.6% | 65.7% |
+| MRR | 0.810 | |
+| Router accuracy | 100% | |
+| Rewrites per question | | 0.06 |
+| Web fallback rate | | 0% |
 
-<!-- Fill this table in from evaluation/results.json after running the eval on your machine. -->
+The corrective loop keeps the same hit rate while removing irrelevant chunks before generation, raising context precision by about 10 points. The one miss in both columns asks for the default number of retrieved chunks; retrieval returned the README's configuration table rather than `config.py`.
 
 ## Roadmap
 

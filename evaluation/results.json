@@ -1,0 +1,486 @@
+{
+  "summary": {
+    "questions": 22,
+    "retrieval_questions": 18,
+    "router_accuracy": 1.0,
+    "baseline_hit_rate": 0.9444444444444444,
+    "baseline_mrr": 0.8101851851851852,
+    "baseline_precision": 0.5555555555555556,
+    "corrective_hit_rate": 0.9444444444444444,
+    "corrective_precision": 0.6574074074074074,
+    "web_fallback_rate": 0.0,
+    "avg_retries": 0.05555555555555555
+  },
+  "rows": [
+    {
+      "question": "Where is the FastAPI chat endpoint defined?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/main.py",
+        "app/main.py",
+        "app/main.py",
+        "app/main.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 1.0,
+      "corrective_sources": [
+        "app/main.py",
+        "app/main.py",
+        "app/main.py",
+        "app/main.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 1.0,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 60.94
+    },
+    {
+      "question": "How does the agent decide whether to rewrite the query or fall back to web search?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/agents/nodes.py",
+        "app/agents/nodes.py",
+        "app/agents/state.py",
+        "app/agents/nodes.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.75,
+      "corrective_sources": [
+        "app/agents/nodes.py",
+        "app/agents/nodes.py",
+        "app/agents/nodes.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 1.0,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 14.81
+    },
+    {
+      "question": "Which nodes and edges make up the LangGraph workflow?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/agents/graph.py",
+        "app/agents/graph.py",
+        "README.md",
+        "app/agents/nodes.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.5,
+      "corrective_sources": [
+        "app/agents/graph.py",
+        "app/agents/graph.py",
+        "README.md",
+        "app/agents/nodes.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.5,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 16.38
+    },
+    {
+      "question": "What happens to conversation memory if Redis is down when the API starts?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/agents/graph.py",
+        "README.md",
+        "app/main.py",
+        "app/main.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.25,
+      "corrective_sources": [
+        "app/agents/graph.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 1.0,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 16.02
+    },
+    {
+      "question": "Which fields does the agent state track for each turn?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "run_agent.py",
+        "app/agents/nodes.py",
+        "app/agents/state.py",
+        "app/agents/nodes.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 0.3333333333333333,
+      "baseline_precision": 0.25,
+      "corrective_sources": [
+        "run_agent.py",
+        "app/agents/nodes.py",
+        "app/agents/state.py",
+        "app/agents/nodes.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.25,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 14.43
+    },
+    {
+      "question": "How does ContextEngine find Ollama when it runs inside a Docker container?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "README.md",
+        "README.md",
+        "README.md",
+        "app/core/llm.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 0.25,
+      "baseline_precision": 0.25,
+      "corrective_sources": [
+        "README.md",
+        "README.md",
+        "README.md",
+        "app/core/llm.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.25,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 16.12
+    },
+    {
+      "question": "How many chunks are retrieved from the vector store per query by default?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/services/git_ingestion.py",
+        "app/db/qdrant_client.py",
+        "README.md",
+        "app/services/ingestion.py"
+      ],
+      "baseline_hit": false,
+      "baseline_rr": 0.0,
+      "baseline_precision": 0.0,
+      "corrective_sources": [
+        "app/db/qdrant_client.py",
+        "README.md",
+        "app/services/ingestion.py"
+      ],
+      "corrective_hit": false,
+      "corrective_precision": 0.0,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 13.87
+    },
+    {
+      "question": "How many query rewrites happen before the agent uses web search?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/agents/nodes.py",
+        "app/agents/nodes.py",
+        "README.md",
+        "app/agents/state.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.5,
+      "corrective_sources": [
+        "app/agents/nodes.py",
+        "app/agents/nodes.py",
+        "README.md"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.6666666666666666,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 14.73
+    },
+    {
+      "question": "Which repository URLs are rejected when indexing a Git repo, and why?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/services/git_ingestion.py",
+        "app/main.py",
+        "app/mcp/server.py",
+        "app/services/git_ingestion.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.5,
+      "corrective_sources": [
+        "app/services/git_ingestion.py",
+        "app/main.py",
+        "app/mcp/server.py",
+        "app/services/git_ingestion.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.5,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 16.21
+    },
+    {
+      "question": "Which directories are skipped when collecting files for ingestion?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/services/ingestion.py",
+        "app/services/ingestion.py",
+        "app/services/ingestion.py",
+        "app/mcp/server.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.75,
+      "corrective_sources": [
+        "app/services/ingestion.py",
+        "app/services/ingestion.py",
+        "app/services/ingestion.py",
+        "app/mcp/server.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.75,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 17.39
+    },
+    {
+      "question": "What is the largest file size that gets indexed?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/services/git_ingestion.py",
+        "app/services/ingestion.py",
+        "app/services/ingestion.py",
+        "app/services/ingestion.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 0.5,
+      "baseline_precision": 0.75,
+      "corrective_sources": [
+        "app/services/ingestion.py",
+        "app/services/ingestion.py",
+        "app/services/ingestion.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 1.0,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 14.9
+    },
+    {
+      "question": "What tools does the MCP server expose to Claude Desktop?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/mcp/server.py",
+        "README.md",
+        "README.md",
+        "README.md"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 1.0,
+      "corrective_sources": [
+        "app/mcp/server.py",
+        "README.md",
+        "README.md",
+        "README.md"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 1.0,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 16.01
+    },
+    {
+      "question": "Why does the MCP server write its logs to stderr instead of stdout?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/core/logging_setup.py",
+        "README.md",
+        "app/mcp/server.py",
+        "app/mcp/server.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.75,
+      "corrective_sources": [
+        "app/core/logging_setup.py",
+        "README.md",
+        "app/mcp/server.py",
+        "app/mcp/server.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.75,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 14.85
+    },
+    {
+      "question": "How is the Qdrant collection created and which distance metric does it use?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/db/qdrant_client.py",
+        "app/db/qdrant_client.py",
+        "app/services/ingestion.py",
+        "README.md"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.5,
+      "corrective_sources": [
+        "app/db/qdrant_client.py",
+        "app/db/qdrant_client.py",
+        "app/services/ingestion.py",
+        "README.md"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.5,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 13.93
+    },
+    {
+      "question": "What does the readiness endpoint check?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "README.md",
+        "app/main.py",
+        "app/main.py",
+        "app/core/llm.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 0.5,
+      "baseline_precision": 0.5,
+      "corrective_sources": [
+        "README.md",
+        "app/main.py",
+        "app/main.py",
+        "app/core/llm.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.5,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 13.9
+    },
+    {
+      "question": "How do I connect ContextEngine to Claude Desktop?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "README.md",
+        "README.md",
+        "app/mcp/server.py",
+        "run_api.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.5,
+      "corrective_sources": [
+        "README.md",
+        "README.md",
+        "app/mcp/server.py",
+        "run_api.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.5,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 13.4
+    },
+    {
+      "question": "What happens when the grader cannot reach the language model?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/agents/nodes.py",
+        "app/agents/nodes.py",
+        "app/agents/nodes.py",
+        "app/services/ingestion.py"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.75,
+      "corrective_sources": [
+        "app/agents/nodes.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 1.0,
+      "web_fallback": false,
+      "retries": 1,
+      "seconds": 26.82
+    },
+    {
+      "question": "Where is the in-memory checkpointer fallback implemented?",
+      "expected_route": "vector_db",
+      "route": "vector_db",
+      "baseline_sources": [
+        "app/agents/graph.py",
+        "app/agents/graph.py",
+        "app/main.py",
+        "README.md"
+      ],
+      "baseline_hit": true,
+      "baseline_rr": 1.0,
+      "baseline_precision": 0.5,
+      "corrective_sources": [
+        "app/agents/graph.py",
+        "app/agents/graph.py",
+        "app/main.py"
+      ],
+      "corrective_hit": true,
+      "corrective_precision": 0.6666666666666666,
+      "web_fallback": false,
+      "retries": 0,
+      "seconds": 13.53
+    },
+    {
+      "question": "What is the latest stable release of Python?",
+      "expected_route": "web_search",
+      "route": "web_search",
+      "seconds": 2.97
+    },
+    {
+      "question": "What were today's top technology news headlines?",
+      "expected_route": "web_search",
+      "route": "web_search",
+      "seconds": 3.1
+    },
+    {
+      "question": "Hi there!",
+      "expected_route": "direct",
+      "route": "direct",
+      "seconds": 0.0
+    },
+    {
+      "question": "Thanks, that was helpful.",
+      "expected_route": "direct",
+      "route": "direct",
+      "seconds": 0.0
+    }
+  ],
+  "meta": {
+    "run_at": "2026-11-01T03:20:49+00:00",
+    "llm_model": "llama3.1",
+    "embedding_model": "mxbai-embed-large",
+    "k": 4,
+    "max_retrieval_retries": 1
+  }
+}
